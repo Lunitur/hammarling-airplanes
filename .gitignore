@@ -1,0 +1,28 @@
+# Nix / direnv
+.direnv/
+/result
+/result-*
+
+# Julia
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
+*.jl.*.mem
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Python (scripts/build_notebook.py)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.vscode/
+.idea/
