@@ -1,6 +1,7 @@
 """Pretvori Julia percent ćelije u Jupyter notebook, bez dodatnih paketa."""
 
 import json
+import sys
 from pathlib import Path
 
 
@@ -20,7 +21,10 @@ def flush_cell():
     cells.append(cell)
 
 
-for line in (root / "sorensen_zhou.jl").read_text().splitlines(True):
+source_path = Path(sys.argv[1]) if len(sys.argv) > 1 else root / "sorensen_zhou.jl"
+output_path = Path(sys.argv[2]) if len(sys.argv) > 2 else root / "Sorensen-Zhou-Lyap.ipynb"
+
+for line in source_path.read_text().splitlines(True):
     if line.startswith("# %%"):
         flush_cell()
         kind = "markdown" if "[markdown]" in line else "code"
@@ -40,6 +44,6 @@ notebook = {
     "nbformat": 4,
     "nbformat_minor": 4,
 }
-(root / "Sorensen-Zhou-Lyap.ipynb").write_text(
+output_path.write_text(
     json.dumps(notebook, ensure_ascii=False, indent=1) + "\n"
 )

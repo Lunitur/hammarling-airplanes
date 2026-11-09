@@ -26,6 +26,28 @@ nix develop
 jupyter notebook Sorensen-Zhou-Lyap.ipynb
 ```
 
+Primjena na mrežu aerodroma nalazi se u `Flight-Delays-Lyapunov.ipynb`
+(izvor: `flight_delays_lyapunov.jl`, pomoćne funkcije: `flight_network.jl`).
+S [Kagglea](https://www.kaggle.com/datasets/usdot/flight-delays) raspakirajte
+`flights.csv` i `airports.csv` u `data/flight-delays/`, ili u bilježnici postavite
+`download_data = true`. Alternativnu lokaciju određuje varijabla `FLIGHT_DELAYS_DATA`.
+Pokrenite ćelije redom u kernelu `Julia Hammarling`. Bilježnica gradi stabilan
+difuzijski model za 50 aerodroma, prikazuje kovarijance i uspoređuje izvore
+poremećaja, brzine oporavka i solvere. Podaci određuju mrežu; dinamika je
+pretpostavljena i ne predstavlja validiranu prognozu stvarnih kašnjenja.
+
+Obnovite novu bilježnicu iz Julia izvora:
+
+```sh
+nix shell nixpkgs#python3 --command python3 scripts/build_notebook.py flight_delays_lyapunov.jl Flight-Delays-Lyapunov.ipynb
+```
+
+Provjere učitavanja i izgradnje mreže:
+
+```sh
+nix develop --command julia --project=. tests/flight_network.jl
+```
+
 U notebooku odaberite kernel `Julia Hammarling` i pokrenite ćelije redom.
 Pri ulasku u okruženje IJulia se automatski instalira u zasebno Julia okruženje
 i registrira kernel koji koristi projektne ovisnosti. Prva instalacija zahtijeva
