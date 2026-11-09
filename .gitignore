@@ -27,5 +27,5 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Lokalni Kaggle podaci
+# Lokalni zrakoplovni podaci
 /data/

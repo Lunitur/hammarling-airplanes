@@ -1,96 +1,109 @@
 module FlightNetwork
 
 using CSV
+using Dates
 using Downloads
 using LinearAlgebra
+using Parquet2
 using Tables
-using ZipFile
 
 export ensure_dataset, load_airports, load_routes, build_network, system_matrix,
        disturbance_matrix, airport_map, covariance_heatmap, recovery_plot, result_table
 
-function ensure_dataset(directory; download=false)
-    files = ("flights.csv", "airports.csv")
-    all(name -> isfile(joinpath(directory, name)), files) && return directory
-    download || error("Nedostaju flights.csv ili airports.csv u $directory. " *
-        "Raspakirajte Kaggle dataset ili postavite download_data = true u bilježnici.")
+const AIRPORTS_URL = "https://raw.githubusercontent.com/davidmegginson/ourairports-data/7dd521a50a421171db1cb69f87657a60b48561c7/airports.csv"
+
+function flight_period(year, month)
+    year >= 2022 || throw(ArgumentError("OPDI podaci počinju 2022. godine."))
+    month in 1:12 || throw(ArgumentError("Mjesec mora biti između 1 i 12."))
+    Date(year, month, 1)
+end
+
+function ensure_dataset(directory; year=2025, month=1, download=false)
+    period = Dates.format(flight_period(year, month), "yyyymm")
+    filename = "flight_list_$period.parquet"
+    paths = (flights=joinpath(directory, filename), airports=joinpath(directory, "airports.csv"))
+    all(isfile, paths) && return paths
+    download || error("Nedostaju $filename ili OurAirports airports.csv u $directory. " *
+        "Preuzmite podatke s https://www.opdi.aero/flight-list-data i $AIRPORTS_URL " *
+        "ili postavite download_data = true u bilježnici.")
     mkpath(directory)
-    mktempdir() do temporary
-        archive = joinpath(temporary, "flight-delays.zip")
+    urls = ("https://www.eurocontrol.int/performance/data/download/OPDI/v002/flight_list/$filename", AIRPORTS_URL)
+    for (path, url) in zip(paths, urls)
+        isfile(path) && continue
         try
-            Downloads.download("https://www.kaggle.com/api/v1/datasets/download/usdot/flight-delays", archive)
-            reader = ZipFile.Reader(archive)
-            try
-                for entry in reader.files
-                    name = basename(entry.name)
-                    name in files || continue
-                    target = joinpath(temporary, name)
-                    open(target, "w") do output
-                        while !eof(entry)
-                            write(output, read(entry, 1024 * 1024))
-                        end
-                    end
-                    mv(target, joinpath(directory, name); force=true)
+            mktempdir(directory) do temporary
+                target = joinpath(temporary, basename(path))
+                Downloads.download(url, target)
+                if endswith(path, ".parquet")
+                    flight_columns(Parquet2.Dataset(target))
+                else
+                    load_airports(target)
                 end
-            finally
-                close(reader)
+                mv(target, path; force=true)
             end
         catch exception
-            error("Preuzimanje/raspakiravanje nije uspjelo: $(sprint(showerror, exception)). " *
-                "Preuzmite dataset ručno s https://www.kaggle.com/datasets/usdot/flight-delays " *
-                "i raspakirajte flights.csv i airports.csv u $directory.")
+            error("Preuzimanje nije uspjelo: $(sprint(showerror, exception)). " *
+                "Preuzmite $url ručno u $path.")
         end
     end
-    all(name -> isfile(joinpath(directory, name)), files) || error("Arhiva nema oba potrebna CSV-a.")
-    directory
+    paths
 end
 
 function load_airports(path)
-    columns = [:IATA_CODE, :AIRPORT, :LATITUDE, :LONGITUDE]
+    columns = [:icao_code, :name, :latitude_deg, :longitude_deg, :continent, :type]
     rows = CSV.File(path; select=columns,
-        types=Dict(:IATA_CODE => String, :AIRPORT => String,
-                   :LATITUDE => Float64, :LONGITUDE => Float64), strict=true)
-    all(name -> name in propertynames(rows), columns) || error("Neispravni stupci u airports.csv.")
+        types=Dict(:icao_code => String, :name => String, :continent => String, :type => String,
+                   :latitude_deg => Float64, :longitude_deg => Float64), strict=true)
+    all(name -> name in propertynames(rows), columns) || error("Neispravni OurAirports stupci u airports.csv.")
     airports = Dict{String, NamedTuple{(:code, :name, :lat, :lon), Tuple{String, String, Float64, Float64}}}()
     for row in rows
-        any(ismissing, (row.IATA_CODE, row.AIRPORT, row.LATITUDE, row.LONGITUDE)) && continue
-        isfinite(row.LATITUDE) && isfinite(row.LONGITUDE) || continue
-        abs(row.LATITUDE) <= 90 && abs(row.LONGITUDE) <= 180 || continue
-        code = String(row.IATA_CODE)
-        airports[code] = (code=code, name=String(row.AIRPORT), lat=row.LATITUDE, lon=row.LONGITUDE)
+        isequal(row.continent, "EU") && !ismissing(row.type) && row.type != "closed" || continue
+        any(ismissing, (row.icao_code, row.name, row.latitude_deg, row.longitude_deg)) && continue
+        isfinite(row.latitude_deg) && isfinite(row.longitude_deg) || continue
+        abs(row.latitude_deg) <= 90 && abs(row.longitude_deg) <= 180 || continue
+        code = String(row.icao_code)
+        occursin(r"^[A-Z]{4}$", code) || continue
+        haskey(airports, code) && error("Ponovljena ICAO oznaka u airports.csv: $code.")
+        airports[code] = (code=code, name=String(row.name), lat=row.latitude_deg, lon=row.longitude_deg)
     end
-    isempty(airports) && error("Nema aerodroma s valjanim koordinatama.")
+    isempty(airports) && error("Nema europskih aerodroma s ICAO oznakama i valjanim koordinatama.")
     airports
 end
 
-function load_routes(path, airports; month=1)
-    month in 1:12 || throw(ArgumentError("Mjesec mora biti između 1 i 12."))
-    columns = [:MONTH, :ORIGIN_AIRPORT, :DESTINATION_AIRPORT, :CANCELLED]
-    rows = CSV.Rows(path; select=columns, reusebuffer=true, strict=true,
-        types=Dict(:MONTH => Int, :ORIGIN_AIRPORT => String,
-                   :DESTINATION_AIRPORT => String, :CANCELLED => Int))
-    all(name -> name in Tables.schema(rows).names, columns) || error("Neispravni stupci u flights.csv.")
+function flight_columns(dataset)
+    columns = (:dof, :adep, :ades)
+    all(name -> name in Tables.schema(dataset).names, columns) ||
+        error("OPDI Parquet mora sadržavati stupce dof, adep i ades.")
+    columns
+end
+
+function load_routes(path, airports; year=2025, month=1)
+    start = flight_period(year, month)
+    stop = start + Month(1)
+    dataset = Parquet2.Dataset(path)
+    columns = flight_columns(dataset)
     routes = Dict{Tuple{String, String}, Int}()
-    selected, cancelled, invalid, accepted = 0, 0, 0, 0
-    for row in rows
-        isequal(row.MONTH, month) || continue
-        selected += 1
-        if isequal(row.CANCELLED, 1)
-            cancelled += 1
-            continue
+    selected, outside_period, invalid, accepted = 0, 0, 0, 0
+    for group in dataset
+        dates, origins, destinations = map(name -> Tables.getcolumn(group, name), columns)
+        for (date, origin, destination) in zip(dates, origins, destinations)
+            if ismissing(date) || !(start <= Date(date) < stop)
+                outside_period += 1
+                continue
+            end
+            selected += 1
+            if ismissing(origin) || ismissing(destination) ||
+               !haskey(airports, origin) || !haskey(airports, destination) || origin == destination
+                invalid += 1
+                continue
+            end
+            key = (String(origin), String(destination))
+            routes[key] = get(routes, key, 0) + 1
+            accepted += 1
         end
-        origin, destination = row.ORIGIN_AIRPORT, row.DESTINATION_AIRPORT
-        if !isequal(row.CANCELLED, 0) || ismissing(origin) || ismissing(destination) ||
-           !haskey(airports, origin) || !haskey(airports, destination) || origin == destination
-            invalid += 1
-            continue
-        end
-        key = (String(origin), String(destination))
-        routes[key] = get(routes, key, 0) + 1
-        accepted += 1
     end
-    isempty(routes) && error("Nema upotrebljivih letova za mjesec $month. Provjerite oznake aerodroma.")
-    (routes=routes, selected=selected, cancelled=cancelled, invalid=invalid, accepted=accepted)
+    isempty(routes) && error("Nema upotrebljivih letova za $year-$month između europskih aerodroma.")
+    (routes=routes, selected=selected, outside_period=outside_period, invalid=invalid, accepted=accepted)
 end
 
 function build_network(routes, airports; n=50)

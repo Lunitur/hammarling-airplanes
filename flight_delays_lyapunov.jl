@@ -1,7 +1,8 @@
 # %% [markdown]
 # # Širenje poremećaja u mreži aerodroma
 # Primjena Sorensen–Zhou / Hammarlingova algoritma na dataset
-# [2015 Flight Delays and Cancellations (Kaggle, US DOT)](https://www.kaggle.com/datasets/usdot/flight-delays).
+# [OPDI v0.0.2 – europski letovi, EUROCONTROL PRC / OpenSky](https://www.opdi.aero/flight-list-data).
+# Mrežu čine opaženi letovi između europskih aerodroma u siječnju 2025.
 #
 # **Pitanje:** kako mjesto nastanka poremećaja i brzina oporavka utječu na
 # varijabilnost cijele mreže? Stvarni letovi određuju veze, a dinamiku zadajemo
@@ -26,18 +27,27 @@ using .AirportLyapunov: lyapunov_factor, relative_residual
 
 # %% [markdown]
 # ## 1. Podaci i parametri
-# Preuzmite i raspakirajte `flights.csv` i `airports.csv` u `data/flight-delays/`.
-# Alternativno, uključite `download_data`: preuzimanje cijele Kaggle ZIP arhive
-# može potrajati i zauzima nekoliko stotina MB; lokalne CSV datoteke koriste se ponovno.
-# Ako javni API traži prijavu ili odbije zahtjev, preuzmite ZIP ručno preko poveznice iznad.
-# `airlines.csv` nije potreban. Podaci se ne dodaju u Git.
+# `download_data = true` preuzima samo odabrani mjesečni OPDI Parquet
+# (`flight_list_202501.parquet`, oko 34 MB) i `airports.csv` iz OurAirports repozitorija
+# u `data/europe-flights/`. Postojeće datoteke koriste se ponovno; podaci se ne dodaju u Git.
+# OurAirports snapshot zaključan je na commit `7dd521a50a421171db1cb69f87657a60b48561c7`.
+# Za ručno preuzimanje koristite [OPDI portal](https://www.opdi.aero/flight-list-data)
+# i [OurAirports CSV](https://raw.githubusercontent.com/davidmegginson/ourairports-data/7dd521a50a421171db1cb69f87657a60b48561c7/airports.csv),
+# a zatim postavite `download_data = false`. Promjena godine/mjeseca odabire drugu datoteku.
+#
+# OPDI daje pojedinačne opažene letove potrebne za veze mreže. Službene agregacije
+# EUROCONTROL-a i UK CAA ne daju te veze na razini pojedinačnih letova.
+# [Hugging Face izvedenica](https://huggingface.co/datasets/345rf4gt56t4r3e3/flight-delays-europe-2023-2025)
+# računa odstupanje trajanja od medijana rute, a ne kašnjenje prema redu letenja;
+# njezina kartica upozorava da nije točan istraživački izvor. Zato koristimo izvorni OPDI.
 #
 # Početna ćelija učitava izvornu implementaciju te pokreće njezin primjer i provjere.
 # Ovdje ne kopiramo algoritam, pa promjene u `sorensen_zhou.jl` vrijede i za ovu analizu.
 
 # %%
-data_directory = get(ENV, "FLIGHT_DELAYS_DATA", joinpath(project_root, "data", "flight-delays"))
-download_data = false
+data_directory = get(ENV, "FLIGHT_DELAYS_DATA", joinpath(project_root, "data", "europe-flights"))
+download_data = true
+year = 2025
 month = 1
 number_of_airports = 50
 alpha = 1.0
@@ -45,28 +55,36 @@ gamma = 0.2
 sigma = 1.0
 background_noise = 0.01
 
-ensure_dataset(data_directory; download=download_data)
+data_paths = ensure_dataset(data_directory; year, month, download=download_data)
 
 # %% [markdown]
 # ## 2. Čišćenje i agregiranje
-# `flights.csv` čitamo redak po redak i zadržavamo samo odabrani mjesec.
-# Izbacujemo otkazane letove, nepoznate/nedostajuće oznake i letove sa istim polazištem i odredištem.
-# Prihvaćamo samo aerodrome s valjanim koordinatama iz `airports.csv`.
-# Neke oznake aerodroma u datasetu su numeričke; ne nagađamo njihovo preslikavanje,
-# nego broj odbačenih redaka izričito prikazujemo. To je posebno važno pri promjeni mjeseca.
+# Iz Parqueta učitavamo samo `dof`, `adep` i `ades`, po grupama redaka, te provjeravamo
+# godinu i mjesec. Koristimo opažene ICAO oznake `adep`/`ades`, bez nadopune predviđenim
+# oznakama `adep_p`/`ades_p`. Izbacujemo nepoznata/nedostajuća polazišta ili odredišta
+# i letove koji se vraćaju u isto polazište.
+# Oba aerodroma moraju imati valjane koordinate i ICAO oznaku (`icao_code`) u OurAirports,
+# `continent = EU` te ne smiju imati `type = closed`. To je geografska Europa prema
+# tom izvoru, a ne Europska unija ni cijelo područje EUROCONTROL-a: npr. UK i Švicarska
+# su uključeni, Cipar i azijski dio Turske nisu. Odbačeni redci uključuju i veze izvan tog područja.
+#
+# OPDI nema oznaku otkazanog leta: odsutnost opažanja ne tumačimo kao otkazivanje.
+# Uzorak ovisi o ADS-B pokrivenosti i uključuje i teretne, privatne i druge opažene letove.
+# `first_seen`/`last_seen` nisu planirana vremena niti pouzdana vremena izlaska/ulaska na stajanku.
 #
 # Rang aerodroma određuje ukupan broj dolazaka i odlazaka u cijelom prihvaćenom
 # mjesečnom uzorku. Zatim zadržavamo samo veze između prvih `number_of_airports` čvorova.
 
 # %%
-airports = load_airports(joinpath(data_directory, "airports.csv"))
-route_data = load_routes(joinpath(data_directory, "flights.csv"), airports; month)
+airports = load_airports(data_paths.airports)
+route_data = load_routes(data_paths.flights, airports; year, month)
 network = build_network(route_data.routes, airports; n=number_of_airports)
 display(result_table([
+    (mjera="Godina", vrijednost=year),
     (mjera="Mjesec", vrijednost=month),
     (mjera="Redaka u mjesecu", vrijednost=route_data.selected),
-    (mjera="Otkazani letovi", vrijednost=route_data.cancelled),
-    (mjera="Nevaljani ili nepoznati podaci", vrijednost=route_data.invalid),
+    (mjera="Izvan razdoblja ili bez datuma", vrijednost=route_data.outside_period),
+    (mjera="Nevaljani podaci ili izvan europskog skupa", vrijednost=route_data.invalid),
     (mjera="Prihvaćeni letovi prije izbora čvorova", vrijednost=route_data.accepted),
     (mjera="Aerodroma u modelu", vrijednost=length(network.codes)),
     (mjera="Letova unutar odabrane mreže", vrijednost=Int(sum(network.counts))),
@@ -195,7 +213,7 @@ display(recovery_plot(recovery_results))
 # %% [markdown]
 # ## 8. Vrijeme izvođenja
 # Pokretanje je opcionalno. BenchmarkTools zagrijava funkcije i mjeri ponovljene
-# pozive na istim matricama; prikazujemo medijan. Učitavanje CSV-a i crtanje nisu
+# pozive na istim matricama; prikazujemo medijan. Učitavanje podataka i crtanje nisu
 # uključeni. Sve tri metode računaju faktor, a Schurova dekompozicija ulazi u mjerenje.
 # Simetrični $A$ ima realan spektar, pa ovaj primjer ne ispituje realne Schurove
 # blokove veličine 2. Takvi testovi ostaju u izvornoj bilježnici.
@@ -217,6 +235,10 @@ end
 # %% [markdown]
 # ## Ograničenja i mogući nastavci
 # - Mreža prikazuje broj letova, bez kapaciteta zrakoplova, presjedanja i rasporeda.
+# - ADS-B pokrivenost i nepotpune oznake aerodroma utječu na rang i težine veza;
+#   prihvaćeni uzorak nije potpun popis europskog prometa ni komercijalnih linija.
+# - OPDI v0.0.2 i mjesec su zadani, a OurAirports snapshot je zaključan; lokalne
+#   datoteke čuvajte za ponavljanje jer se upstream OPDI datoteke mogu revidirati.
 # - Simetrizacija i difuzija su pretpostavke modela, a ne empirijski utvrđena dinamika.
 # - Pri usporedbi mjeseci normalizacija se ponovno računa; za čistu usporedbu
 #   sezonskih promjena trebalo bi zadržati iste čvorove i isti faktor normalizacije.

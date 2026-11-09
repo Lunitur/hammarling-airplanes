@@ -28,13 +28,49 @@ jupyter notebook Sorensen-Zhou-Lyap.ipynb
 
 Primjena na mrežu aerodroma nalazi se u `Flight-Delays-Lyapunov.ipynb`
 (izvor: `flight_delays_lyapunov.jl`, pomoćne funkcije: `flight_network.jl`).
-S [Kagglea](https://www.kaggle.com/datasets/usdot/flight-delays) raspakirajte
-`flights.csv` i `airports.csv` u `data/flight-delays/`, ili u bilježnici postavite
-`download_data = true`. Alternativnu lokaciju određuje varijabla `FLIGHT_DELAYS_DATA`.
+Koristi se službeni [OPDI v0.0.2 (EUROCONTROL PRC / OpenSky)](https://www.opdi.aero/data),
+zadano **siječanj 2025.** Bilježnica automatski preuzima mjesečni Parquet i
+[OurAirports referentni CSV](https://raw.githubusercontent.com/davidmegginson/ourairports-data/7dd521a50a421171db1cb69f87657a60b48561c7/airports.csv)
+u `data/europe-flights/`. Postojeće datoteke koriste se ponovno; `download_data = false`
+isključuje preuzimanje. Alternativnu lokaciju određuje varijabla `FLIGHT_DELAYS_DATA`.
+Za ručno preuzimanje spremite
+[`flight_list_202501.parquet`](https://www.eurocontrol.int/performance/data/download/OPDI/v002/flight_list/flight_list_202501.parquet)
+(oko 34 MB) i navedeni CSV kao `airports.csv`. Parametri `year` i `month` određuju
+Parquet datoteku; dostupne mjesece pogledajte na [OPDI portalu](https://www.opdi.aero/flight-list-data).
+OurAirports snapshot je zaključan na commit `7dd521a50a421171db1cb69f87657a60b48561c7`.
+Lokalne datoteke čuvajte za ponavljanje rezultata jer se OPDI datoteke mogu revidirati.
+
 Pokrenite ćelije redom u kernelu `Julia Hammarling`. Bilježnica gradi stabilan
 difuzijski model za 50 aerodroma, prikazuje kovarijance i uspoređuje izvore
 poremećaja, brzine oporavka i solvere. Podaci određuju mrežu; dinamika je
 pretpostavljena i ne predstavlja validiranu prognozu stvarnih kašnjenja.
+
+OPDI je odabran jer model treba **broj opaženih letova između parova aerodroma**,
+a ne mjerena kašnjenja. Učitavaju se samo `dof`, `adep` i `ades`, po grupama redaka.
+Oba kraja veze moraju odgovarati OurAirports ICAO oznakama (`icao_code`), imati
+valjane koordinate, `continent = EU` i ne smiju biti označeni kao zatvoreni.
+Ova geografska definicija uključuje UK i Švicarsku, ali isključuje Cipar i azijski
+dio Turske; nije jednaka Europskoj uniji ili području EUROCONTROL-a.
+Nepoznate oznake, letovi izvan tog skupa i povratak u isto polazište odbacuju se
+i broje u izvještaju. Predviđene oznake `adep_p`/`ades_p` ne koriste se.
+Uzorak ovisi o ADS-B pokrivenosti, nije potpuni popis prometa i uključuje i
+nekomercijalne letove. Nema podataka o otkazivanju ili kašnjenju prema rasporedu;
+`first_seen`/`last_seen` ne tumače se kao vremena na stajanci.
+
+Ostali razmotreni izvori:
+
+- [Hugging Face European Flight Delays](https://huggingface.co/datasets/345rf4gt56t4r3e3/flight-delays-europe-2023-2025):
+  `delay_min` je trajanje leta minus medijan rute/mjeseca, ne kašnjenje prema redu
+  letenja. Autor izričito upozorava da dataset nije točan istraživački izvor.
+- [EUROCONTROL CSV](https://ansperformance.eu/csv/): službene agregacije korisne
+  za buduću usporedbu kašnjenja, ali ne daju pojedinačne letove za izgradnju ove mreže.
+- [UK CAA punctuality](https://www.caa.co.uk/data-and-analysis/uk-aviation-market/flight-punctuality/uk-flight-punctuality-statistics/):
+  podaci o točnosti za UK, užeg geografskog opsega od ovog europskog primjera.
+
+Izvore navodite kao EUROCONTROL PRC / OpenSky Network (OPDI) i OurAirports;
+[OPDI opis uporabe](https://www.opdi.aero/about) usmjeren je na nekomercijalnu uporabu,
+a [OurAirports](https://ourairports.com/data/) objavljuje podatke u javnoj domeni.
+Preuzeti podaci nisu dio ovog Git repozitorija.
 
 Obnovite novu bilježnicu iz Julia izvora:
 
