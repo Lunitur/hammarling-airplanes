@@ -1,5 +1,5 @@
 {
-  description = "Julia razvojno okruženje za Hammarlingov algoritam";
+  description = "Julia i LaTeX razvojna okruženja za Hammarlingov algoritam";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
@@ -12,6 +12,17 @@
         let
           pkgs = import nixpkgs { inherit system; };
           jupyter = pkgs.python3.withPackages (ps: [ ps.notebook ]);
+          tex = pkgs.texliveBasic.withPackages (ps: with ps; [
+            amsmath
+            amsfonts
+            babel-croatian
+            booktabs
+            cm-super
+            enumitem
+            geometry
+            hyphen-croatian
+            latexmk
+          ]);
         in
         {
           default = pkgs.mkShell {
@@ -36,6 +47,10 @@
                     env=Dict("JULIA_LOAD_PATH" => "@:$(dirname(Base.active_project())):@stdlib"))
               '
             '';
+          };
+
+          latex = pkgs.mkShell {
+            packages = [ tex pkgs.texlab ];
           };
         });
     };

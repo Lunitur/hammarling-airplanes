@@ -1,0 +1,310 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[croatian]{babel}
+\usepackage{amsmath,amssymb}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+
+\title{Hammarlingova metoda za Lyapunovljevu jednadžbu}
+\author{}
+\date{10. 11. 2026.}
+
+\begin{document}
+
+\maketitle
+
+\section{Uvod}
+
+Lyapunovljeva jednadžba
+\[
+AP + PA^{T} + BB^{T} = 0
+\]
+javlja se u teoriji upravljanja, među ostalim pri računanju gramiana za redukciju modela. Ako je matrica $A$ stabilna, rješenje $P$ simetrično je i pozitivno semidefinitno. Stoga ga možemo prikazati u faktoriziranom obliku $P = UU^{T}$.
+
+Za male i srednje guste matrice često se koriste direktne metode koje najprije svode $A$ na Schurov oblik. Bartels--Stewartova metoda \cite{bartels} tako računa rješenje Sylvesterove jednadžbe, čiji je poseban slučaj Lyapunovljeva jednadžba. Hammarlingova metoda \cite{hammarling} izravno računa faktor $U$, bez prethodnog formiranja $P$.
+
+Takav je pristup koristan kada se u daljnjem računu upotrebljava upravo faktor. Primjer su Hankelove singularne vrijednosti sustava, koje se mogu dobiti singularnom dekompozicijom produkta faktora dvaju gramiana. Za pozitivno definitnu $P$ vrijedi i $\kappa_2(P) = \kappa_2(U)^2$. Ta relacija objašnjava dio prednosti rada s faktorima, ali sama po sebi ne jamči točnost rješenja loše uvjetovane Lyapunovljeve jednadžbe.
+
+U seminaru pratimo rad Sorensena i Zhoua \cite{sorensen}, koji razrađuju klasične metode i predlažu drukčije ažuriranje faktora desne strane. Najprije izvodimo postupak u kompleksnoj aritmetici, a zatim obrađujemo realni Schurov oblik i njegove dijagonalne blokove veličine $2\times 2$. Na kraju odvajamo rezultate iz izvornog rada od onoga što je zasad ostvareno u priloženoj implementaciji.
+
+\section{Matematička pozadina}
+
+Radi zajedničkog zapisa realnog i kompleksnog slučaja promatramo jednadžbu
+\[
+AP + PA^{H} + BB^{H} = 0, \qquad
+A \in \mathbb{C}^{n\times n}, \quad B \in \mathbb{C}^{n\times p},
+\]
+gdje $H$ označava konjugirano transponiranje. Za realne matrice ono se svodi na transponiranje, koje označavamo s $T$.
+
+Matrica $A$ stabilna je ako sve njezine svojstvene vrijednosti zadovoljavaju $\operatorname{Re}\lambda_i < 0$. Tada je $\lambda_i + \overline{\lambda_j} \neq 0$ za sve $i,j$, pa Lyapunovljeva jednadžba ima jedinstveno rješenje. Ono se može zapisati kao
+\[
+P = \int_0^\infty e^{At}\,BB^{H}\,e^{A^{H}t}\,dt.
+\]
+Za sustav $\dot{x} = Ax + Bv$ ta je matrica gramian upravljivosti. Iz integralnog prikaza slijedi da je $P$ hermitska i pozitivno semidefinitna. Ako je par $(A,B)$ upravljiv, $P$ je pozitivno definitna.
+
+Tražimo gornjetrokutasti faktor $U$ takav da je $P = UU^{H}$. Redoslijed faktora ovdje je bitan: uz gornjetrokutastu matricu često se Choleskyjeva faktorizacija piše kao $P = U^{H}U$, dok se u ovom seminaru dosljedno koristi $P = UU^{H}$. Za pozitivno definitnu $P$ dijagonalni elementi faktora mogu se odabrati pozitivnima. Izvod koji slijedi oslanja se na tu pretpostavku; semidefinitni slučaj zahtijeva i obradu nultih dijagonalnih elemenata.
+
+Schurova dekompozicija daje $A = QRQ^{H}$, gdje je $Q$ unitarna, a $R$ gornjetrokutasta. Uvodimo
+\[
+\widetilde{P} = Q^{H}PQ, \qquad \widetilde{B} = Q^{H}B,
+\]
+pa jednadžba poprima oblik
+\[
+R\widetilde{P} + \widetilde{P}R^{H} + \widetilde{B}\widetilde{B}^{H} = 0.
+\]
+Ako izračunamo $\widetilde{P} = \widetilde{U}\widetilde{U}^{H}$, povratkom u izvornu bazu dobivamo
+\[
+P = FF^{H}, \qquad F = Q\widetilde{U}.
+\]
+Matrica $F$ općenito nije trokutasta. Ako je potreban trokutasti faktor u izvornoj bazi, dobiva se dodatnom ortogonalnom ili unitarnom transformacijom faktora $F$.
+
+U nastavku, radi jednostavnijeg zapisa, oznake $P$ i $B$ upotrebljavamo za matrice u Schurovoj bazi. U realnoj aritmetici $Q$ je ortogonalna, a $R$ kvazigornjetrokutasta: na dijagonali ima blokove veličine $1\times 1$ za realne svojstvene vrijednosti i $2\times 2$ za kompleksno konjugirane parove.
+
+\section{Rekurzivna struktura jednadžbe}
+
+Prije izvoda faktoriziranog postupka pogledajmo kako se računa samo rješenje $P$. U jednadžbi $RP + PR^{H} + D = 0$, gdje je $D = BB^{H}$, izdvojimo zadnji redak i stupac:
+\[
+R = \begin{bmatrix} R_1 & r \\ 0 & \lambda \end{bmatrix}, \quad
+P = \begin{bmatrix} P_1 & x \\ x^{H} & p_{nn} \end{bmatrix}, \quad
+D = \begin{bmatrix} D_1 & d \\ d^{H} & d_{nn} \end{bmatrix}.
+\]
+Usporedbom blokova dobivamo
+\begin{align*}
+(\lambda + \bar{\lambda})p_{nn} + d_{nn} &= 0, \\
+(R_1 + \bar{\lambda}I)x + p_{nn}r + d &= 0, \\
+R_1P_1 + P_1R_1^{H} + D_1 + rx^{H} + xr^{H} &= 0.
+\end{align*}
+Prva jednadžba daje
+\[
+p_{nn} = -\frac{d_{nn}}{2\operatorname{Re}\lambda}.
+\]
+Nazivnik je zbog stabilnosti različit od nule, no može biti vrlo malen ako je $\lambda$ blizu imaginarne osi. Zatim se iz druge jednadžbe računa $x$, a treća određuje $P_1$ kao rješenje Lyapunovljeve jednadžbe reda $n-1$. Ponavljanjem postupka dobivamo sve stupce matrice $P$, od zadnjega prema prvome.
+
+Hammarlingova metoda koristi isti redoslijed, ali računa stupce faktora $U$. Pritom nije dovoljno samo zamijeniti $P$ s $UU^{H}$: treba pronaći i faktor desne strane za sljedeći korak. Pokazat ćemo da se nakon izdvajanja zadnjeg stupca faktora dobiva nova jednadžba s desnom stranom $\widehat{B}_1\widehat{B}_1^{H}$, pri čemu se $\widehat{B}_1$ računa izravno iz $B$.
+
+\section{Postupak u kompleksnoj aritmetici}
+
+Promatramo jednadžbu $RP + PR^{H} + BB^{H} = 0$ i faktorizaciju $P = UU^{H}$. Uz pretpostavku upravljivosti vrijedi $P > 0$, pa možemo pisati
+\[
+U = \begin{bmatrix} U_1 & u \\ 0 & \tau \end{bmatrix}, \quad
+R = \begin{bmatrix} R_1 & r \\ 0 & \lambda \end{bmatrix}, \quad
+B = \begin{bmatrix} B_1 \\ b^{H} \end{bmatrix}, \qquad \tau > 0.
+\]
+Iz toga slijedi
+\[
+P = \begin{bmatrix}
+U_1U_1^{H} + uu^{H} & \tau u \\
+\tau u^{H} & \tau^2
+\end{bmatrix}.
+\]
+Matrica
+\[
+E = \begin{bmatrix} I & -u/\tau \\ 0 & 1 \end{bmatrix}
+\]
+svodi $P$ na blokovno dijagonalni oblik:
+\[
+EPE^{H} = \operatorname{diag}(U_1U_1^{H},\tau^2).
+\]
+Množenjem Lyapunovljeve jednadžbe slijeva s $E$ i zdesna s $E^{H}$ koeficijentna matrica postaje $ERE^{-1}$, a faktor desne strane postaje
+\[
+EB = \begin{bmatrix} \widehat{B}_1 \\ b^{H} \end{bmatrix}, \qquad
+\widehat{B}_1 = B_1 - \frac{1}{\tau}ub^{H}.
+\]
+Usporedbom blokova transformirane jednadžbe dobivamo
+\begin{align*}
+(\lambda + \bar{\lambda})\tau^2 + b^{H}b &= 0, \\
+(R_1 - \lambda I)u + \tau r + \frac{1}{\tau}\widehat{B}_1b &= 0, \\
+R_1U_1U_1^{H} + U_1U_1^{H}R_1^{H} + \widehat{B}_1\widehat{B}_1^{H} &= 0.
+\end{align*}
+Prva jednadžba određuje dijagonalni element
+\[
+\tau = \frac{\lVert b\rVert_2}{\sqrt{-2\operatorname{Re}\lambda}}.
+\]
+Uvrštavanjem izraza za $\widehat{B}_1$ u drugu jednadžbu te korištenjem jednakosti $b^{H}b/\tau^2 = -(\lambda + \bar{\lambda})$ dobivamo
+\[
+(R_1 + \bar{\lambda}I)u = -\tau r - \frac{1}{\tau}B_1b.
+\]
+Time je određen zadnji stupac faktora $U$. Treća jednadžba ima isti oblik kao početna, ali je reda $n-1$ i njezina je nepoznanica faktor $U_1$. Važno je da se ona odnosi na $U_1U_1^{H}$, odnosno na Schurov komplement bloka $\tau^2$ u $P$, a ne na vodeći blok $P_1 = U_1U_1^{H} + uu^{H}$.
+
+Postupak odgovara algoritmu 3.1 iz rada \cite{sorensen}. Za $j = n,n-1,\ldots,2$ provode se sljedeći koraci:
+\begin{enumerate}
+\item Označi $b = B(j,:)^{H}$ i izračunaj
+\[
+\tau = \frac{\lVert b\rVert_2}{\sqrt{-2\operatorname{Re}R(j,j)}},
+\qquad U(j,j) = \tau.
+\]
+\item Riješi gornjetrokutasti sustav
+\[
+\bigl(R(1{:}j{-}1,1{:}j{-}1) + \overline{R(j,j)}I\bigr)u
+= -\tau R(1{:}j{-}1,j) - \frac{1}{\tau}B(1{:}j{-}1,:)b.
+\]
+\item Postavi $U(1{:}j{-}1,j) = u$ i ažuriraj
+\[
+B(1{:}j{-}1,:) \leftarrow B(1{:}j{-}1,:) - \frac{1}{\tau}ub^{H}.
+\]
+\end{enumerate}
+Na kraju je $U(1,1) = \lVert B(1,:)\rVert_2/\sqrt{-2\operatorname{Re}R(1,1)}$. Podmatrične oznake u ovom opisu slijede Matlabov zapis. Ako je u semidefinitnom slučaju $b = 0$, postavljaju se $\tau = 0$ i $u = 0$, a dijeljenja s $\tau$ i ažuriranje preskaču se.
+
+Rješavanje trokutastih sustava ukupno zahtijeva $O(n^3)$ operacija, a ažuriranje faktora $B$ zahtijeva $O(n^2p)$ operacija. To je trošak postupka nakon Schurove transformacije; sama dekompozicija guste matrice također ima trošak $O(n^3)$. Matrice $P$ i $BB^{H}$ tijekom računanja faktora ne formiraju se.
+
+\section{Postupak u realnoj aritmetici}
+
+Za realne ulazne matrice možemo ostati u realnoj aritmetici ako koristimo realni Schurov oblik. Tada stupce obrađujemo pojedinačno ili u paru, ovisno o veličini posljednjeg dijagonalnog bloka aktivne matrice $R$.
+
+\subsection{Blok veličine $1\times 1$}
+
+Neka je posljednji dijagonalni blok jednak $\lambda$. Zadnji stupac rješenja $P$ ima oblik
+\[
+x = P(:,n) = \begin{bmatrix} \tau u \\ \tau^2 \end{bmatrix}
+\]
+i zadovoljava
+\[
+(R + \lambda I)x = -Bb, \qquad b = B(n,:)^{T}.
+\]
+Iz njega računamo
+\[
+\tau = \sqrt{x_n}, \qquad u = \frac{x_{1:n-1}}{\tau},
+\]
+a zatim ažuriramo faktor desne strane:
+\[
+\widehat{B}_1 = B_1 - \frac{1}{\tau}ub^{T}.
+\]
+Iako se računa u realnoj aritmetici, sustav je općenito kvazigornjetrokutast jer preostali dio matrice $R$ može sadržavati blokove veličine $2\times 2$.
+
+\subsection{Blok veličine $2\times 2$}
+
+Neka je aktivna matrica reda $j$, a njezin posljednji dijagonalni blok
+\[
+S = \begin{bmatrix} s_{11} & s_{12} \\ s_{21} & s_{22} \end{bmatrix}.
+\]
+Označimo $M = R(1{:}j,1{:}j)$ i $C = B(j{-}1{:}j,:)$. Posljednja dva stupca trenutačnog rješenja, $Z = P(:,j{-}1{:}j)$, zadovoljavaju Sylvesterovu jednadžbu
+\[
+MZ + ZS^{T} = G, \qquad G = -B(1{:}j,:)C^{T}.
+\]
+Za razliku od skalarnog slučaja, ta su dva stupca međusobno povezana. Ako pišemo $Z = [z_1,z_2]$ i $G = [g_1,g_2]$, eliminacijom dobivamo shemu 2-solve:
+\begin{align*}
+K &= M^2 + (s_{11}+s_{22})M + (s_{11}s_{22}-s_{12}s_{21})I, \\
+K[z_1,z_2] &= [\,Mg_1+s_{22}g_1-s_{12}g_2,\;
+Mg_2+s_{11}g_2-s_{21}g_1\,].
+\end{align*}
+Oba stupca tako računamo sa zajedničkom koeficijentnom matricom $K$. Ona zadržava kvazigornjetrokutastu strukturu. Kvadrat $R^2$ može se izračunati jednom i zatim koristiti njegove vodeće podmatrice.
+
+Dobiveni stupci pripadaju matrici $P$, pa ih još treba pretvoriti u stupce faktora $U$. Podijelimo ih na
+\[
+Z = \begin{bmatrix} Y \\ W \end{bmatrix}, \qquad
+U = \begin{bmatrix} U_1 & V \\ 0 & T \end{bmatrix},
+\]
+gdje su $W$ i $T$ reda dva. Iz $P = UU^{T}$ slijedi
+\[
+W = TT^{T}, \qquad Y = VT^{T}.
+\]
+Najprije simetriziramo $W$ zamjenom njegovih izvandijagonalnih elemenata njihovom aritmetičkom sredinom. Zatim računamo gornjetrokutasti faktor $T$ u redoslijedu od posljednje dijagonale prema prvoj te rješavamo $VT^{T} = Y$ za $V$. Time dobivamo posljednja dva stupca faktora, uključujući nulu ispod dijagonale. Ta nula proizlazi iz trokutastog oblika $T$; odgovarajući element matrice $P$ općenito nije nula.
+
+Faktor desne strane za preostalu jednadžbu glasi
+\[
+\widehat{B}_1 = B_1 - VT^{-1}C, \qquad B_1 = B(1{:}j{-}2,:).
+\]
+Ovdje $T^{-1}C$ označava rješenje malog trokutastog sustava; inverz ne treba eksplicitno računati. Ažuriranje se može provesti i kao dvije uzastopne izmjene ranga jedan. Nakon toga nastavljamo s vodećom podmatricom reda $j-2$.
+
+Cijeli realni postupak stoga obrađuje posljednji blok aktivne matrice, računa pripadne stupce faktora, ažurira $B$ i smanjuje red za jedan ili dva. Kad ostane samo jedan redak, primjenjuje se skalarni korak. To je blokovni opis realne varijante iz algoritma 3.2 u radu \cite{sorensen}, uz pretpostavku pozitivne definitnosti.
+
+\section{Formulacije Sorensena i Zhoua}
+
+\subsection{Ažuriranje faktora desne strane}
+
+Izmjena
+\[
+\widehat{B}_1 = B_1 - \frac{1}{\tau}ub^{H}
+\]
+jedan je od doprinosa rada \cite{sorensen}. Prema opisu autora, izvorni Hammarlingov postupak razlikuje slučaj u kojem $B$ ima više stupaca nego redaka od slučaja u kojem ima više redaka nego stupaca. Navedena formula vrijedi u oba slučaja. To je korisno u redukciji modela, gdje matrica $B \in \mathbb{R}^{n\times p}$ često ima malen broj stupaca, $p \ll n$. Broj stupaca pritom ostaje isti kroz sve korake, dok se broj redaka smanjuje.
+
+\subsection{Tri sheme za blokove veličine $2\times 2$}
+
+Sorensen i Zhou opisuju tri načina rješavanja dvostupčanog Sylvesterova sustava. Iste se sheme mogu primijeniti pri računanju dvaju stupaca rješenja u realnom Hammarlingovu postupku.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{p{0.13\textwidth} p{0.36\textwidth} p{0.36\textwidth}}
+\toprule
+Shema & Postupak & Računska svojstva \\
+\midrule
+1-solve & Jedan stupac računa se rješavanjem sustava, a drugi izravnom eliminacijom. & Manje operacija, ali dijeljenje elementom bloka može pojačati pogreške. \\
+\addlinespace
+2-solve & Dva sustava sa zajedničkom koeficijentnom matricom rješavaju se zajedno. & Izbjegava navedeno dijeljenje i koristi zajedničku obradu stupaca. Formiranje $M^2$ može narušiti točnost. \\
+\addlinespace
+E-solve & Realnom transformacijom blok se svodi na oblik određen svojstvenim vrijednostima, pa se rješava transformirani sustav. & Povezana je sa shemom 2-solve, ali zahtijeva dodatnu transformaciju i povratak u početnu bazu. \\
+\bottomrule
+\end{tabular}
+\caption{Sheme za obradu blokova veličine $2\times 2$ prema \cite{sorensen}.}
+\end{table}
+
+Za blok sa svojstvenim vrijednostima $\mu \pm i\eta$ vrijedi
+\[
+s_{11}+s_{22} = 2\mu, \qquad \det S = \mu^2+\eta^2,
+\]
+pa je koeficijentna matrica sheme 2-solve jednaka
+\[
+M^2 + 2\mu M + (\mu^2+\eta^2)I = (M+\mu I)^2 + \eta^2I.
+\]
+Ista se matrica pojavljuje u shemi E-solve, nakon što se blok realnom transformacijom svede na oblik $\left[\begin{smallmatrix}\mu & \eta \\ -\eta & \mu\end{smallmatrix}\right]$. U egzaktnoj aritmetici sheme su ekvivalentne, dok se u računanju razlikuju po dodatnim transformacijama i pogreškama zaokruživanja. Autori u svojim pokusima daju prednost shemi 2-solve zbog omjera vremena izvođenja i točnosti.
+
+\section{Priložena implementacija}
+
+U projektu je zasad implementirana kompleksna varijanta Hammarlingova postupka u Juliji. Funkcija \texttt{lyapunov\_factor} računa kompleksnu Schurovu dekompoziciju, provjerava stabilnost matrice $A$ i poziva funkciju \texttt{hammarling\_complex\_arithmetic}, koja računa faktor u Schurovoj bazi. Kompleksna aritmetika koristi se i kada su ulazi realni.
+
+Nakon povratka u izvornu bazu funkcija \texttt{upper\_factor} ponovno svodi faktor na trokutasti oblik. Za to koristi QR dekompoziciju uz obrat redoslijeda stupaca. Pritom se puno rješenje $P$ ne formira.
+
+Zasebno je implementirana funkcija \texttt{sylvester\_sz} za realnu Sylvesterovu jednadžbu. Ona za blokove veličine $2\times 2$ koristi shemu 2-solve. Realna varijanta Hammarlingove metode te sheme 1-solve i E-solve zasad nisu implementirane. Izvod u prethodnim odjeljcima stoga opisuje i postupke koji tek trebaju biti dodani projektu.
+
+Priloženi primjer provjerava rezidual i uspoređuje dobiveno rješenje s rezultatom paketa \texttt{MatrixEquations}. Relativni rezidual računa se kao
+\[
+\rho = \frac{\lVert AP+PA^{H}+BB^{H}\rVert_F}
+{2\lVert A\rVert_F\lVert P\rVert_F+\lVert BB^{H}\rVert_F},
+\qquad P = UU^{H}.
+\]
+U toj se provjeri matrica $P$ formira nakon završetka algoritma. Malen rezidual pokazuje da izračunata matrica približno zadovoljava jednadžbu, ali kod loše uvjetovanog problema ne mora značiti i malu pogrešku rješenja. Trenutačna implementacija nema zaštitno skaliranje za izbjegavanje preljeva i podljeva, pa je za ocjenu njezine pouzdanosti potreban širi skup numeričkih pokusa.
+
+\section{Numerički rezultati iz izvornog rada}
+
+Rezultati opisani u ovom odjeljku preuzeti su iz rada \cite{sorensen}; nisu mjerenja priložene implementacije u Juliji. Autori uspoređuju Matlabove programe \texttt{lyapU}, \texttt{lyapUR} i \texttt{lyapUE}, koji koriste kompleksnu aritmetiku, realnu aritmetiku sa shemom 2-solve odnosno realnu aritmetiku sa shemom E-solve. Shemu 1-solve izostavljaju iz te usporedbe zbog slabije točnosti.
+
+U prikazanim pokusima izravno računanje faktora bilo je brže od računanja cijelog rješenja funkcijom \texttt{lyap.m}. Za realne ulaze realna je varijanta bila brža od kompleksne. Pri usporedbi shema za Sylvesterovu jednadžbu pokazalo se i da manji broj aritmetičkih operacija ne mora značiti kraće vrijeme izvođenja: shema 2-solve mogla je biti brža od sheme 1-solve. Autori kao moguće objašnjenje navode bolje iskorištavanje priručne memorije.
+
+Usporedba implementacije realne varijante u Fortranu s programom \texttt{sllyap} iz biblioteke SLICOT \cite{slicot} pokazala je usporediva vremena izvođenja, iako autorski kod nije bio posebno podešen. Pokusi u Matlabu provedeni su na računalu s procesorom Pentium III, a oni u Fortranu na radnoj stanici UltraSPARC II. Ti rezultati opisuju tadašnje implementacije i okruženje; iz njih se ne može izravno zaključiti kakav bi bio odnos brzina na današnjem računalu ili u Juliji.
+
+Opisane metode uglavnom koriste operacije razine 2 biblioteke BLAS. Za velike guste trokutaste jednadžbe rekurzivni blokovni algoritmi Jonssona i Kågströma \cite{jonsson} bolje koriste operacije razine 3 i memorijsku hijerarhiju. Kod velikih rijetkih problema dodatnu poteškoću predstavlja sama Schurova dekompozicija: skupa je i u pravilu ne čuva rijetkost. U takvim se problemima često primjenjuju projekcijske metode, a direktni postupci služe za manje jednadžbe nastale projekcijom.
+
+\section{Zaključak}
+
+Hammarlingova metoda računa faktor rješenja Lyapunovljeve jednadžbe slijedom trokutastih sustava i ažuriranja faktora desne strane. Izvod u kompleksnoj aritmetici pokazuje kako nakon svakog izračunatog stupca ostaje jednadžba istog oblika, manjeg reda. Formulacija Sorensena i Zhoua pritom omogućuje da se faktor $B$ ažurira istom formulom bez obzira na odnos broja redaka i stupaca.
+
+U realnoj aritmetici blokovi veličine $2\times 2$ zahtijevaju zajedničku obradu dvaju stupaca. Shema 2-solve za to daje dva sustava sa zajedničkom koeficijentnom matricom, no eksplicitno formiranje kvadrata matrice može povećati numeričke poteškoće. Kod izrazito loše uvjetovanih jednadžbi ni izravno računanje faktora samo po sebi nije dovoljno; jedan od posebnih pristupa jest implicitna deflacija \cite{ghavimi}.
+
+Priložena implementacija zasad obuhvaća kompleksni Hammarlingov postupak i realni Sylvesterov postupak sa shemom 2-solve. Sljedeći je korak dovršiti realnu varijantu računanja faktora te usporediti točnost i vremena izvođenja na većem skupu primjera. Tek bi takva mjerenja omogućila procjenu koliko se prednosti opisane u izvornom radu prenose na ovu implementaciju.
+
+\begin{thebibliography}{9}
+\bibitem{bartels}
+R. H. Bartels, G. W. Stewart, Solution of the matrix equation $AX + XB = C$, \emph{Comm. ACM} \textbf{15}(9) (1972), 820--826.
+
+\bibitem{slicot}
+P. Benner, V. Mehrmann, V. Sima, S. Van Huffel, A. Varga, SLICOT---a subroutine library in systems and control theory, \emph{Applied and Computational Control, Signals, and Circuits} \textbf{1}, Birkhäuser (1999), 499--539.
+
+\bibitem{ghavimi}
+A. R. Ghavimi, A. J. Laub, An implicit deflation method for ill-conditioned Sylvester and Lyapunov equations, \emph{Int. J. Control} \textbf{61}(5) (1995), 1119--1141.
+
+\bibitem{hammarling}
+S. J. Hammarling, Numerical solution of the stable, nonnegative definite Lyapunov equation, \emph{IMA J. Numer. Anal.} \textbf{2}(3) (1982), 303--323.
+
+\bibitem{jonsson}
+I. Jonsson, B. Kågström, Recursive blocked algorithms for solving triangular matrix equations, part I, \emph{ACM Trans. Math. Software} \textbf{28}(4) (2002), 392--415.
+
+\bibitem{sorensen}
+D. C. Sorensen, Y. Zhou, Direct methods for matrix Sylvester and Lyapunov equations, \emph{Journal of Applied Mathematics} \textbf{2003}:6 (2003), 277--303.
+\end{thebibliography}
+
+\end{document}

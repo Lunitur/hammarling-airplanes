@@ -49,3 +49,15 @@ Ovo je početna implementacija za male guste matrice, bez zaštitnog skaliranja.
 Sylvesterova jednadžba zahtijeva da `A1` i `-A2` nemaju zajedničkih svojstvenih
 vrijednosti. Za loše uvjetovane probleme još treba provjeriti ponašanje algoritma.
 Izvorni rad je u `Sorensen-Zhou-Lyap.pdf`.
+
+## Kompilacija seminara
+
+Zasebno LaTeX okruženje dostupno je naredbom `nix develop .#latex`.
+Za izravnu kompilaciju iz korijena projekta:
+
+```sh
+nix develop .#latex --command latexmk -pdf -interaction=nonstopmode -halt-on-error -cd seminar/Hammarlingova_metoda_seminar.tex
+```
+
+PDF nastaje u `seminar/Hammarlingova_metoda_seminar.pdf`. Okruženje uključuje
+podršku za hrvatski jezik i jezični poslužitelj `texlab`.
