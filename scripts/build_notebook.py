@@ -21,7 +21,7 @@ def flush_cell():
     cells.append(cell)
 
 
-source_path = Path(sys.argv[1]) if len(sys.argv) > 1 else root / "sorensen_zhou.jl"
+source_path = Path(sys.argv[1]) if len(sys.argv) > 1 else root / "primjer.jl"
 output_path = Path(sys.argv[2]) if len(sys.argv) > 2 else root / "Sorensen-Zhou-Lyap.ipynb"
 
 for line in source_path.read_text().splitlines(True):
@@ -38,7 +38,7 @@ flush_cell()
 notebook = {
     "cells": cells,
     "metadata": {
-        "kernelspec": {"display_name": "Julia", "language": "julia", "name": "julia"},
+        "kernelspec": {"display_name": "Julia Hammarling", "language": "julia", "name": "julia-hammarling"},
         "language_info": {"name": "julia", "file_extension": ".jl"},
     },
     "nbformat": 4,

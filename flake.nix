@@ -32,6 +32,7 @@
                 end
                 using IJulia
                 IJulia.installkernel("Julia Hammarling", "--project=$project";
+                    specname="julia-hammarling",
                     env=Dict("JULIA_LOAD_PATH" => "@:$(dirname(Base.active_project())):@stdlib"))
               '
             '';
